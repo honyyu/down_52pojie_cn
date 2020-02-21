@@ -1,171 +1,130 @@
-# 配置说明
+# php 文件扫描程序
 
-有 3 种部署方案，
+扫描目录，并生成 json、jsonp、yaml 格式的文件，另外还可以为文件和文件夹附加描述信息。
 
-1. 为了优化网站 SEO，使用 [ngx-fancyindex](https://github.com/aperezdc/ngx-fancyindex)
-2. 不考虑 SEO 问题，希望 URL 看着比较美观
-3. 单页应用
-
-第 1 种：ngx-fancyindex 可以直接在 HTML 中生成文件列表，这对搜索引擎十分友好，但是对用户不好。
-
-其余两种都不需要 ngx-fancyindex，这两种的区别在于使用了 Vue Router 的两种模式，`history` 或者 `hash`。
-
-第 2 种：使用 history 模式，URL 是 `https://down.52pojie.cn/Tools/Debuggers/`，这种需要对 Nginx 或 Apache 进行一些配置。
-
-第 3 种：使用 hash 模式，URL 是 `https://down.52pojie.cn/#/Tools/Debuggers/`，这种直接上传到服务器上即可，无需过多配置。
-
-本程序可以不依赖 ngx-fancyindex，可以单独使用，可以作为静态页面使用，例如本项目的 [GitHub Pages](https://ganlvtech.github.io/down_52pojie_cn/)。
-
-## 使用 ngx-fancyindex
-
-### 安装 ngx-fancyindex
-
-在服务器安装 ngx-fancyindex
-
-```bash
-sudo apt-get install nginx-extras
-```
-
-### 下载并解压本仓库的文件
-
-在 [本仓库 Release 页面](https://github.com/ganlvtech/down_52pojie_cn/releases) 下载 `dist.zip` 的压缩包，解压到网站根目录。
-
-此时网站的目录结构应该是
+## 目录结构
 
 ```plain
-/
-    foo.zip
-    bar.exe
-    ......
-    .fancyindex/
-        header.html
-        footer.html
-        js/
-        css/
+* config/                配置文件目录（需要自行修改）
+    * config.php         扫描本地文件使用的设置
+* data/                  数据文件目录（程序会储存一些数据，有些需要手动修改）
+    * description.yml    文件夹/文件的描述信息，会混合到生成的 list.json 中
+* src/                   主要代码目录（4 种获取文件列表的扫描器、3 输出格式的编解码器）
+* vendor/
+* .gitignore
+* composer.json
+* composer.lock
+* crawl.php              自动爬取文件列表，用于构建 GitHub Pages
+* README.md
+* scan.php               用于扫描本地文件
 ```
 
-### 修改 Nginx 配置文件
+## 使用方法
 
-然后修改 `/etc/nginx/site-enables/your-site`，在其中增加 ngx-fancyindex 的配置。示例配置文件如下。
-
-```nginx
-server {
-    listen       80;
-    listen       443 ssl;
-    root         /srv/www/down;
-    index        index.html index.htm;
-    server_name  down.test;
-
-    location / {
-        fancyindex         on;
-        fancyindex_header  "/.fancyindex/header.html";
-        fancyindex_footer  "/.fancyindex/footer.html";
-    }
-}
-```
-
-> `ngx-fancyindex` 默认不会列举出以 `.` 开头的文件夹和文件。
-
-这时执行
+首先，复制一份配置文件
 
 ```bash
-sudo service nginx reload
+cp config/config.php.example config/config.php
 ```
 
-应该可以看到网站的主页已经变成了本项目的样子了，但是现在暂时还没有文件列表。生成文件列表请参考 [php 文件扫描程序说明文档](php/README.md)。
+然后，修改 `config/config.php` 中的配置参数
 
-## 使用 history 模式
-
-## 网站的目录结构
-
-```plain
-/
-    foo.zip
-    bar.exe
-    ......
-    index.html
-    .fancyindex/
-        js/
-        css/
-```
-
-### Nginx 配置
-
-```nginx
-server {
-    listen       80;
-    listen       443 ssl;
-    root         /srv/www/down;
-    index        /index.html;
-    server_name  down.test;
-}
-```
-
-### Apache 配置
-
-打开 Rewrite 模块
+最后，执行扫描指令
 
 ```bash
-sudo a2enmod rewrite
+php scan.php
 ```
 
-新建 `/etc/apache2/sites-enabled/down.test.conf`
+如果 `data/description.yml` 不存在的话，首次执行 `php scan.php` 会自动生成一个 `data/description.yml` 的模板，这里面没有 `description` 字段，如果想给文件添加备注的话，需要手动在对应文件的文件名下添加一个 `description` 字段，并填写备注信息。
 
-```apache
-<VirtualHost *:80>
-    ServerName down.test
-    DocumentRoot /srv/www/down
+然后，再次执行 `php scan.php` 则会将描述信息合并到 `list.json` 中。
 
-    <Directory "/srv/www/down">
-        Options FollowSymlinks
-        AllowOverride None
-        Require all granted
+## 备注文件格式
 
-        RewriteEngine On
-        RewriteBase /
-        RewriteCond %{REQUEST_FILENAME} !-f
-        RewriteRule ^(.*)$ /index.html [L]
-    </Directory>
-</VirtualHost>
+`php scan.php` 自动生成的格式如下。
+
+```yaml
+name: /
+children:
+  -
+    name: Challenge
+    children:
+      -
+        name: 2012CM
+      -
+        name: 2016_Security_Challenge
 ```
 
-### 插件配置
+你需要手动添加几个 `description` 字段，然后填入相关描述。
 
-```javascript
-window.down52PojieCn = new Down52PojieCn({
-    routerMode: 'history'
-});
+```yaml
+name: /
+children:
+  -
+    name: Challenge
+    description: 收录论坛往年比赛题目
+    children:
+      -
+        name: 2012CM
+        description: 2012 年论坛举行 CrackMe 大赛的作品和对应的分析文章，难度有易、中、难，大家任选学习
+      -
+        name: 2016_Security_Challenge
+        description: 2016 年论坛举行安全挑战赛，容纳了更多与实际应用息息相关的 Windows、移动安全相关考题，欢迎大家学习
 ```
 
-## 使用 hash 模式
+## 配置文件内容
 
-### 网站的目录结构
+```php
+<?php
 
-```plain
-/
-    foo.zip
-    bar.exe
-    ......
-    index.html
-    .fancyindex/
-        js/
-        css/
+return [
+    // 扫描的根目录（绝对路径）
+    'BASE_PATH' => '/home/ganlv/Downloads',
+    // 排除的文件（相对于 BASE_PATH）
+    'EXCLUDE_FILES' => [
+        '/list.json',
+        '/list.js',
+    ],
+    // 描述文件（绝对路径）
+    'DESCRIPTION_FILE' => dirname(__DIR__) . '/data/description.yml',
+    // 输出的文件类型（json 或者 jsonp）
+    'OUTPUT_TYPE' => 'jsonp',
+    // 输出的文件路径（绝对路径）
+    'OUTPUT_FILE' => '/home/ganlv/Downloads/public/.list.js',
+    // jsonp 回调函数名（需要与 index.html 中的设置相同）
+    'JSONP_CALLBACK' => '__jsonpCallbackDown52PojieCn',
+];
 ```
 
-### Nginx 配置
+## 爬虫
 
-```nginx
-server {
-    listen       80;
-    listen       443 ssl;
-    root         /srv/www/down;
-    index        index.html;
-    server_name  down.test;
-}
+执行爬虫脚本（有缓存）
+
+```bash
+php php/crawl.php
 ```
 
-### 插件配置
+缓存顺序：
 
-```javascript
-window.down52PojieCn = new Down52PojieCn({});
-```
+1. https://raw.githubusercontent.com/ganlvtech/down_52pojie_cn/gh-pages/list.json
+2. https://down.52pojie.cn/list.json
+3. https://down.52pojie.cn/list.js
+4. 爬取文件列表
+
+注意：爬虫脚本并没有读取任何配置文件，所有内容都是直接在 crawl.php 中写好的。
+
+## LICENSE
+
+The MIT License (MIT)
+
+Copyright (c) 2018 Ganlv
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
